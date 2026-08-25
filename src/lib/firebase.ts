@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, onSnapshot, query, where, orderBy, addDoc } from 'firebase/firestore';
+import { getDatabase, ref, set as rtdbSet, onValue, push as rtdbPush } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
@@ -14,11 +15,35 @@ export const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-19NG576H67"
 };
 
-// Initialize Firebase safely for SSR & Client
+// Initialize Firebase safely
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 const db = getFirestore(app);
+const rtdb = getDatabase(app);
 const storage = getStorage(app);
 
-export { app, auth, googleProvider, signInWithPopup, db, storage };
+export { 
+  app, 
+  auth, 
+  googleProvider, 
+  signInWithPopup, 
+  db, 
+  rtdb,
+  storage,
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  getDocs, 
+  updateDoc, 
+  onSnapshot, 
+  query, 
+  where, 
+  orderBy, 
+  addDoc,
+  ref,
+  rtdbSet,
+  onValue,
+  rtdbPush
+};

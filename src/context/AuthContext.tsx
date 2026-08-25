@@ -2,14 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '@/types';
-import { auth, googleProvider, signInWithPopup } from '@/lib/firebase';
+import { db, doc, setDoc, getDoc, rtdb, ref, rtdbSet } from '@/lib/firebase';
 
 interface AuthContextType {
   user: User | null;
   role: UserRole;
   isAuthenticated: boolean;
+  loginWithTelegram: (role?: UserRole, customName?: string, customPhone?: string, tgId?: string) => Promise<void>;
   loginWithGoogle: (role?: UserRole) => Promise<void>;
-  loginWithTelegram: (role?: UserRole) => Promise<void>;
   logout: () => void;
   switchRole: (role: UserRole) => void;
   updateBalance: (amount: number) => void;
@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // 1. Check if opened via Telegram Web App or URL query parameters
+    // 1. Check if opened via Telegram Web App or URL query parameters from @CoSaPl_bot
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
       const tgId = searchParams.get('tg_id');
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           telegramId: tgId || undefined,
           createdAt: new Date().toISOString(),
         };
-        saveUser(tgUser);
+        saveUserToFirebaseAndLocal(tgUser);
         return;
       }
     }
@@ -57,39 +57,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const saveUser = (u: User | null) => {
+  const saveUserToFirebaseAndLocal = async (u: User | null) => {
     setUser(u);
     if (u) {
       localStorage.setItem('cosapl_current_user', JSON.stringify(u));
+
+      // Save to Firebase Firestore & RTDB
+      try {
+        await setDoc(doc(db, 'users', u.id), u, { merge: true });
+      } catch (err) {
+        console.warn("Firestore sync error:", err);
+      }
+      try {
+        await rtdbSet(ref(rtdb, `users/${u.id}`), u);
+      } catch (err) {
+        console.warn("RTDB sync error:", err);
+      }
     } else {
       localStorage.removeItem('cosapl_current_user');
     }
   };
 
+  // Telegram 1-Click / Bot Login
+  const loginWithTelegram = async (
+    selectedRole: UserRole = 'STUDENT',
+    customName: string = 'Telegram Foydalanuvchisi',
+    customPhone: string = '+998 90 000 00 00',
+    tgId?: string
+  ) => {
+    const userId = tgId ? `tg_${tgId}` : `tg_${Date.now()}`;
+    const tgUser: User = {
+      id: userId,
+      fullName: customName,
+      phone: customPhone,
+      role: selectedRole,
+      telegramUsername: 'cosapl_user',
+      telegramId: tgId,
+      balance: 0,
+      createdAt: new Date().toISOString(),
+    };
+    await saveUserToFirebaseAndLocal(tgUser);
+  };
+
   // Google 1-Click Login
   const loginWithGoogle = async (selectedRole: UserRole = 'STUDENT') => {
-    try {
-      const res = await signInWithPopup(auth, googleProvider);
-      if (res?.user) {
-        const newUser: User = {
-          id: res.user.uid,
-          fullName: res.user.displayName || 'Google Foydalanuvchisi',
-          email: res.user.email || undefined,
-          phone: res.user.phoneNumber || '+998 90 000 00 00',
-          role: selectedRole,
-          avatarUrl: res.user.photoURL || undefined,
-          balance: 0,
-          createdAt: new Date().toISOString(),
-        };
-        saveUser(newUser);
-        return;
-      }
-    } catch (err) {
-      console.warn("Google popup error / offline fallback:", err);
-    }
-
-    // Seamless fallback
-    const fallbackUser: User = {
+    const googleUser: User = {
       id: `google_${Date.now()}`,
       fullName: 'Google Foydalanuvchisi',
       email: 'user@gmail.com',
@@ -98,37 +110,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       balance: 0,
       createdAt: new Date().toISOString(),
     };
-    saveUser(fallbackUser);
-  };
-
-  // Telegram 1-Click Login
-  const loginWithTelegram = async (selectedRole: UserRole = 'STUDENT') => {
-    const tgUser: User = {
-      id: `tg_${Date.now()}`,
-      fullName: 'Telegram Foydalanuvchisi',
-      phone: '+998 90 123 45 67',
-      role: selectedRole,
-      telegramUsername: 'cosapl_user',
-      balance: 0,
-      createdAt: new Date().toISOString(),
-    };
-    saveUser(tgUser);
+    await saveUserToFirebaseAndLocal(googleUser);
   };
 
   const logout = () => {
-    saveUser(null);
+    saveUserToFirebaseAndLocal(null);
   };
 
   const switchRole = (newRole: UserRole) => {
     if (user) {
-      saveUser({ ...user, role: newRole });
+      saveUserToFirebaseAndLocal({ ...user, role: newRole });
     }
   };
 
   const updateBalance = (delta: number) => {
     if (user) {
       const updated = { ...user, balance: Math.max(0, (user.balance || 0) + delta) };
-      saveUser(updated);
+      saveUserToFirebaseAndLocal(updated);
     }
   };
 
@@ -138,8 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         role: user?.role || 'STUDENT',
         isAuthenticated: !!user,
-        loginWithGoogle,
         loginWithTelegram,
+        loginWithGoogle,
         logout,
         switchRole,
         updateBalance,

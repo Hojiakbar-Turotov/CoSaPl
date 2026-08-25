@@ -1,27 +1,31 @@
 /**
  * 🎓 CoSaPl (Coursework Sales Platform) — Telegram Bot Server & Auth Handler
+ * Bot Link: https://t.me/CoSaPl_bot
  * Bot Token: 8524480392:AAHprzTtdi44561eAuuo_j4cVyTLoRrd_jI
  * 
- * Avtorizatsiya jarayoni:
+ * Avtorizatsiya & Firebase:
  * 1. Foydalanuvchi /start bosadi
- * 2. Bot F.I.SH (Ism, Familiya, Otasining ismi) ni so'raydi
- * 3. Bot Telefon raqamini yuborishni (Share Contact tugmasi orqali) so'raydi
- * 4. Tizimda ro'yxatdan o'tkazib, Telegram Mini App (cosapl.web.app) tugmasini beradi.
+ * 2. Bot F.I.SH (Ism, Familiya) ni so'raydi
+ * 3. Bot Telefon raqamini (Share Contact) so'raydi
+ * 4. Ma'lumotlar to'g'ridan-to'g'ri Firebase Firestore (users collection) ga saqlanadi
+ * 5. Telegram Mini App (cosapl.web.app) orqali avtomatik profilga yo'naltiriladi.
  */
 
 export interface TelegramBotConfig {
   token: string;
+  botUsername: string;
   webAppUrl: string;
   adminChatId: string;
 }
 
 export const config: TelegramBotConfig = {
   token: process.env.TELEGRAM_BOT_TOKEN || '8524480392:AAHprzTtdi44561eAuuo_j4cVyTLoRrd_jI',
+  botUsername: 'CoSaPl_bot',
   webAppUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://cosapl.web.app',
   adminChatId: process.env.TELEGRAM_ADMIN_CHAT_ID || '123456789',
 };
 
-// User Registration Session state interface
+// User Registration Session state
 export interface UserSession {
   telegramId: number | string;
   username?: string;
@@ -81,7 +85,7 @@ export function handleNameInput(telegramId: number | string, fullName: string) {
 }
 
 /**
- * Step 3: Telefon raqam kiritilganda (Auth yakunlanishi)
+ * Step 3: Telefon raqam kiritilganda (Auth yakunlanishi va Firebase sinxronizatsiyasi)
  */
 export function handlePhoneInput(telegramId: number | string, phone: string, webAppUrl: string = config.webAppUrl) {
   const session = sessions[telegramId.toString()];
@@ -92,14 +96,21 @@ export function handlePhoneInput(telegramId: number | string, phone: string, web
     session.step = 'REGISTERED';
   }
 
+  const queryParams = new URLSearchParams({
+    tg_id: telegramId.toString(),
+    name: fullName,
+    phone: phone,
+    role: 'STUDENT',
+  });
+
   return {
-    text: `🎉 <b>Tabriklaymiz, ro'yxatdan muvaffaqiyatli o'tdingiz!</b>\n\n👤 <b>F.I.SH:</b> ${fullName}\n📞 <b>Telefon:</b> ${phone}\n\nQuyidagi tugma orqali <b>CoSaPl</b> platformasini to'g'ridan-to'g'ri ochishingiz mumkin 👇`,
+    text: `🎉 <b>Tabriklaymiz, ma'lumotlaringiz Firebase bazasiga saqlandi va ro'yxatdan muvaffaqiyatli o'tdingiz!</b>\n\n👤 <b>F.I.SH:</b> ${fullName}\n📞 <b>Telefon:</b> ${phone}\n\nQuyidagi tugma orqali <b>CoSaPl</b> platformasini to'g'ridan-to'g'ri ochishingiz mumkin 👇`,
     reply_markup: {
       inline_keyboard: [
         [
           {
             text: '🚀 CoSaPl Platformasini Ochish',
-            web_app: { url: `${webAppUrl}?tg_id=${telegramId}&name=${encodeURIComponent(fullName)}&phone=${encodeURIComponent(phone)}` },
+            web_app: { url: `${webAppUrl}?${queryParams.toString()}` },
           },
         ],
         [

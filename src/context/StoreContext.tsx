@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Work, Order, OrderMessage, PlagiarismCheck, Transaction, WorkStatus, OrderStatus } from '@/types';
 import { INITIAL_WORKS, INITIAL_ORDERS, INITIAL_MESSAGES, INITIAL_PLAGIARISM_CHECKS, INITIAL_TRANSACTIONS } from '@/lib/mockData';
+import { db, doc, setDoc, collection, addDoc, getDocs, rtdb, ref, rtdbSet } from '@/lib/firebase';
 import { useAuth } from './AuthContext';
 
 interface StoreContextType {
@@ -51,14 +52,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // Load from localStorage on mount
   useEffect(() => {
-    // Clear legacy mock works if any
-    localStorage.removeItem('edumarket_works');
-    localStorage.removeItem('edumarket_orders');
-    localStorage.removeItem('edumarket_messages');
-    localStorage.removeItem('edumarket_plagiarism');
-    localStorage.removeItem('edumarket_transactions');
-    localStorage.removeItem('edumarket_purchased');
-
     const savedWorks = localStorage.getItem('cosapl_works');
     if (savedWorks) {
       try { setWorks(JSON.parse(savedWorks)); } catch (e) { setWorks([]); }
@@ -92,30 +85,55 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Save changes
-  const saveWorks = (newWorks: Work[]) => {
+  // Save changes to localStorage and Firebase
+  const saveWorks = async (newWorks: Work[]) => {
     setWorks(newWorks);
     localStorage.setItem('cosapl_works', JSON.stringify(newWorks));
+    try {
+      await rtdbSet(ref(rtdb, 'works'), newWorks);
+    } catch (e) {
+      console.warn("RTDB works sync:", e);
+    }
   };
 
-  const saveOrders = (newOrders: Order[]) => {
+  const saveOrders = async (newOrders: Order[]) => {
     setOrders(newOrders);
     localStorage.setItem('cosapl_orders', JSON.stringify(newOrders));
+    try {
+      await rtdbSet(ref(rtdb, 'orders'), newOrders);
+    } catch (e) {
+      console.warn("RTDB orders sync:", e);
+    }
   };
 
-  const saveMessages = (newMsgs: Record<string, OrderMessage[]>) => {
+  const saveMessages = async (newMsgs: Record<string, OrderMessage[]>) => {
     setMessages(newMsgs);
     localStorage.setItem('cosapl_messages', JSON.stringify(newMsgs));
+    try {
+      await rtdbSet(ref(rtdb, 'messages'), newMsgs);
+    } catch (e) {
+      console.warn("RTDB messages sync:", e);
+    }
   };
 
-  const savePlagiarism = (newPlg: PlagiarismCheck[]) => {
+  const savePlagiarism = async (newPlg: PlagiarismCheck[]) => {
     setPlagiarismChecks(newPlg);
     localStorage.setItem('cosapl_plagiarism', JSON.stringify(newPlg));
+    try {
+      await rtdbSet(ref(rtdb, 'plagiarism'), newPlg);
+    } catch (e) {
+      console.warn("RTDB plagiarism sync:", e);
+    }
   };
 
-  const saveTransactions = (newTx: Transaction[]) => {
+  const saveTransactions = async (newTx: Transaction[]) => {
     setTransactions(newTx);
     localStorage.setItem('cosapl_transactions', JSON.stringify(newTx));
+    try {
+      await rtdbSet(ref(rtdb, 'transactions'), newTx);
+    } catch (e) {
+      console.warn("RTDB transactions sync:", e);
+    }
   };
 
   const savePurchased = (ids: string[]) => {
@@ -124,17 +142,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   // --- Work methods ---
-  const addWork = (workData: Omit<Work, 'id' | 'createdAt' | 'status' | 'salesCount' | 'downloadsCount' | 'rating'>) => {
+  const addWork = async (workData: Omit<Work, 'id' | 'createdAt' | 'status' | 'salesCount' | 'downloadsCount' | 'rating'>) => {
+    const id = `work_${Date.now()}`;
     const newWork: Work = {
       ...workData,
-      id: `work_${Date.now()}`,
+      id,
       status: 'APPROVED',
       salesCount: 0,
       downloadsCount: 0,
       rating: 5.0,
       createdAt: new Date().toISOString(),
     };
-    saveWorks([newWork, ...works]);
+    await saveWorks([newWork, ...works]);
+    try {
+      await setDoc(doc(db, 'works', id), newWork);
+    } catch (e) {
+      console.warn("Firestore addWork:", e);
+    }
   };
 
   const approveWork = (id: string) => {
@@ -217,6 +241,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
 
     saveOrders([newOrder, ...orders]);
+    try {
+      setDoc(doc(db, 'orders', orderId), newOrder);
+    } catch (e) {
+      console.warn("Firestore createOrder:", e);
+    }
 
     // Create initial welcome system message in chat
     const initialMsg: OrderMessage = {
@@ -308,6 +337,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
 
     savePlagiarism([newCheck, ...plagiarismChecks]);
+    try {
+      setDoc(doc(db, 'plagiarism', id), newCheck);
+    } catch (e) {
+      console.warn("Firestore plagiarism check:", e);
+    }
 
     const newTx: Transaction = {
       id: `tx_${Date.now()}`,
@@ -436,7 +470,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 export function useStore() {
   const context = useContext(StoreContext);
   if (!context) {
-    throw new Error('useStore must be used within a StoreProvider');
+    throw new Error('useStore must be used within an StoreProvider');
   }
   return context;
 }

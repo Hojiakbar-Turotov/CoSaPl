@@ -22,7 +22,7 @@ export default function LoginPage() {
 
   const handleTelegramLogin = async () => {
     setIsLoading(true);
-    await loginWithTelegram(role);
+    await loginWithTelegram(role, 'Telegram Foydalanuvchisi', '+998 90 000 00 00');
     setIsLoading(false);
     router.push('/profil');
   };
@@ -80,6 +80,17 @@ export default function LoginPage() {
 
         {/* 1-Click Auth Action Buttons */}
         <div className="space-y-3.5 relative z-10">
+          {/* Telegram 1-Click Button */}
+          <button
+            type="button"
+            onClick={handleTelegramLogin}
+            disabled={isLoading}
+            className="w-full py-3.5 px-5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-3 shadow-lg shadow-sky-500/25 transition-all hover:scale-[1.01]"
+          >
+            <Send className="w-5 h-5" />
+            <span>Telegram orqali kirish</span>
+          </button>
+
           {/* Google 1-Click Button */}
           <button
             type="button"
@@ -87,7 +98,6 @@ export default function LoginPage() {
             disabled={isLoading}
             className="w-full py-3.5 px-5 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-2xl border-2 border-slate-200 hover:border-slate-300 text-sm flex items-center justify-center gap-3 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]"
           >
-            {/* Google Colorful Icon */}
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
                 fill="#4285F4"
@@ -108,17 +118,6 @@ export default function LoginPage() {
             </svg>
             <span>Google orqali kirish</span>
           </button>
-
-          {/* Telegram 1-Click Button */}
-          <button
-            type="button"
-            onClick={handleTelegramLogin}
-            disabled={isLoading}
-            className="w-full py-3.5 px-5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-3 shadow-lg shadow-sky-500/25 transition-all hover:scale-[1.01]"
-          >
-            <Send className="w-5 h-5" />
-            <span>Telegram orqali kirish</span>
-          </button>
         </div>
 
         {/* Telegram Bot Helper Info */}
@@ -128,18 +127,19 @@ export default function LoginPage() {
               <Sparkles className="w-4 h-4 text-sky-600" />
               Rasmiy Telegram Bot:
             </span>
-            <span className="text-[11px] text-sky-700 font-mono">@CoSaPlBot</span>
+            <span className="text-[11px] text-sky-700 font-mono font-bold">@CoSaPl_bot</span>
           </div>
           <p className="text-slate-600 leading-relaxed text-[11px]">
-            Telegram ilovangiz orqali ochishni xohlasangiz botimizga o'tishingiz mumkin:
+            Telegram ilovangiz orqali botdan foydalanishingiz mumkin:
           </p>
           <a
-            href="https://t.me/CoSaPlBot"
+            href="https://t.me/CoSaPl_bot"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-bold text-sky-600 hover:text-sky-700 underline text-xs"
+            className="w-full py-2 px-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all text-xs"
           >
-            <span>Botni ochish (@CoSaPlBot)</span>
+            <Send className="w-3.5 h-3.5" />
+            <span>Botni ochish (@CoSaPl_bot)</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
@@ -147,7 +147,7 @@ export default function LoginPage() {
         {/* Security Note */}
         <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 pt-2 border-t border-slate-100">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Xavfsiz va shifrlangan 1-bosishli OAuth avtorizatsiya</span>
+          <span>Barcha ma'lumotlar Firebase Cloud bazasiga saqlanadi</span>
         </div>
       </div>
     </div>
