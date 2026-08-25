@@ -47,58 +47,80 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<Record<string, OrderMessage[]>>(INITIAL_MESSAGES);
   const [plagiarismChecks, setPlagiarismChecks] = useState<PlagiarismCheck[]>(INITIAL_PLAGIARISM_CHECKS);
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
-  const [purchasedWorkIds, setPurchasedWorkIds] = useState<string[]>(['work_1']);
+  const [purchasedWorkIds, setPurchasedWorkIds] = useState<string[]>([]);
 
   // Load from localStorage on mount
   useEffect(() => {
-    const savedWorks = localStorage.getItem('edumarket_works');
-    if (savedWorks) setWorks(JSON.parse(savedWorks));
+    // Clear legacy mock works if any
+    localStorage.removeItem('edumarket_works');
+    localStorage.removeItem('edumarket_orders');
+    localStorage.removeItem('edumarket_messages');
+    localStorage.removeItem('edumarket_plagiarism');
+    localStorage.removeItem('edumarket_transactions');
+    localStorage.removeItem('edumarket_purchased');
 
-    const savedOrders = localStorage.getItem('edumarket_orders');
-    if (savedOrders) setOrders(JSON.parse(savedOrders));
+    const savedWorks = localStorage.getItem('cosapl_works');
+    if (savedWorks) {
+      try { setWorks(JSON.parse(savedWorks)); } catch (e) { setWorks([]); }
+    } else {
+      setWorks([]);
+    }
 
-    const savedMsgs = localStorage.getItem('edumarket_messages');
-    if (savedMsgs) setMessages(JSON.parse(savedMsgs));
+    const savedOrders = localStorage.getItem('cosapl_orders');
+    if (savedOrders) {
+      try { setOrders(JSON.parse(savedOrders)); } catch (e) { setOrders([]); }
+    }
 
-    const savedPlg = localStorage.getItem('edumarket_plagiarism');
-    if (savedPlg) setPlagiarismChecks(JSON.parse(savedPlg));
+    const savedMsgs = localStorage.getItem('cosapl_messages');
+    if (savedMsgs) {
+      try { setMessages(JSON.parse(savedMsgs)); } catch (e) { setMessages({}); }
+    }
 
-    const savedTx = localStorage.getItem('edumarket_transactions');
-    if (savedTx) setTransactions(JSON.parse(savedTx));
+    const savedPlg = localStorage.getItem('cosapl_plagiarism');
+    if (savedPlg) {
+      try { setPlagiarismChecks(JSON.parse(savedPlg)); } catch (e) { setPlagiarismChecks([]); }
+    }
 
-    const savedPurchased = localStorage.getItem('edumarket_purchased');
-    if (savedPurchased) setPurchasedWorkIds(JSON.parse(savedPurchased));
+    const savedTx = localStorage.getItem('cosapl_transactions');
+    if (savedTx) {
+      try { setTransactions(JSON.parse(savedTx)); } catch (e) { setTransactions([]); }
+    }
+
+    const savedPurchased = localStorage.getItem('cosapl_purchased');
+    if (savedPurchased) {
+      try { setPurchasedWorkIds(JSON.parse(savedPurchased)); } catch (e) { setPurchasedWorkIds([]); }
+    }
   }, []);
 
   // Save changes
   const saveWorks = (newWorks: Work[]) => {
     setWorks(newWorks);
-    localStorage.setItem('edumarket_works', JSON.stringify(newWorks));
+    localStorage.setItem('cosapl_works', JSON.stringify(newWorks));
   };
 
   const saveOrders = (newOrders: Order[]) => {
     setOrders(newOrders);
-    localStorage.setItem('edumarket_orders', JSON.stringify(newOrders));
+    localStorage.setItem('cosapl_orders', JSON.stringify(newOrders));
   };
 
   const saveMessages = (newMsgs: Record<string, OrderMessage[]>) => {
     setMessages(newMsgs);
-    localStorage.setItem('edumarket_messages', JSON.stringify(newMsgs));
+    localStorage.setItem('cosapl_messages', JSON.stringify(newMsgs));
   };
 
   const savePlagiarism = (newPlg: PlagiarismCheck[]) => {
     setPlagiarismChecks(newPlg);
-    localStorage.setItem('edumarket_plagiarism', JSON.stringify(newPlg));
+    localStorage.setItem('cosapl_plagiarism', JSON.stringify(newPlg));
   };
 
   const saveTransactions = (newTx: Transaction[]) => {
     setTransactions(newTx);
-    localStorage.setItem('edumarket_transactions', JSON.stringify(newTx));
+    localStorage.setItem('cosapl_transactions', JSON.stringify(newTx));
   };
 
   const savePurchased = (ids: string[]) => {
     setPurchasedWorkIds(ids);
-    localStorage.setItem('edumarket_purchased', JSON.stringify(ids));
+    localStorage.setItem('cosapl_purchased', JSON.stringify(ids));
   };
 
   // --- Work methods ---
@@ -106,7 +128,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const newWork: Work = {
       ...workData,
       id: `work_${Date.now()}`,
-      status: 'APPROVED', // Auto approved for instant demo or PENDING for moderation
+      status: 'APPROVED',
       salesCount: 0,
       downloadsCount: 0,
       rating: 5.0,
@@ -149,7 +171,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
     saveTransactions([newTx, ...transactions]);
 
-    // Add author earnings (85% author share, 15% platform commission)
+    // Add author earnings (85% author share)
     const authorEarnings = Math.round(work.price * 0.85);
     const earnTx: Transaction = {
       id: `tx_earn_${Date.now()}`,
@@ -201,7 +223,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       id: `msg_${Date.now()}`,
       orderId,
       senderId: 'system',
-      senderName: 'EduMarket Dispetcher',
+      senderName: 'CoSaPl Dispetcher',
       senderRole: 'ADMIN',
       text: `Assalomu alaykum ${newOrder.studentName}! Sizning ${newOrder.orderType === 'BULK' ? 'Ommaviy' : 'Individual'} buyurtmangiz qabul qilindi. 24-48 soat ichida mutaxassislarimiz rejani bepul tayyorlab ushbu chatga yuklashadi. Qo'shimcha savollaringizni shu yerda yozishingiz mumkin.`,
       timestamp: new Date().toISOString(),
@@ -235,7 +257,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
     saveOrders(updatedOrders);
 
-    // Send plan into chat as well
     sendMessage(
       orderId,
       `📋 BEPUL REJA TAYYOR BO'LDI:\n\n${planText}\n\nIltimos, rejani tekshirib ko'ring va tasdiqlang.`,
@@ -267,7 +288,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const id = `plg_${Date.now().toString().slice(-4)}`;
     const price = 25000;
     
-    // Deduct user balance if available
     if (user && user.balance >= price) {
       updateBalance(-price);
     }
@@ -289,7 +309,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     savePlagiarism([newCheck, ...plagiarismChecks]);
 
-    // Record transaction
     const newTx: Transaction = {
       id: `tx_${Date.now()}`,
       userId: user?.id || 'guest',
@@ -297,17 +316,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       provider: 'BALANCE',
       amount: price,
       status: 'COMPLETED',
-      description: `Antiplagiat tekshiruvi: "${newCheck.fileName}"`,
+      description: `Antiplag.uz tekshiruvi: "${newCheck.fileName}"`,
       createdAt: new Date().toISOString(),
     };
     saveTransactions([newTx, ...transactions]);
-
-    // Simulate auto-completion after 5 seconds for interactive demo
-    setTimeout(() => {
-      const uniqueness = Math.floor(Math.random() * (95 - 75 + 1)) + 75; // 75% to 95%
-      const certCode = `EM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-      completePlagiarismCheck(id, uniqueness, '/uploads/sample_report.pdf', `/uploads/cert_${certCode}.pdf`);
-    }, 4000);
 
     return id;
   };
@@ -316,7 +328,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setPlagiarismChecks(prev => {
       const updated = prev.map(p => {
         if (p.id === id) {
-          const certCode = p.certificateCode || `EM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+          const certCode = p.certificateCode || `AP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
           return {
             ...p,
             status: 'COMPLETED' as const,
@@ -329,7 +341,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         return p;
       });
-      localStorage.setItem('edumarket_plagiarism', JSON.stringify(updated));
+      localStorage.setItem('cosapl_plagiarism', JSON.stringify(updated));
       return updated;
     });
   };
@@ -352,7 +364,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     saveTransactions([newTx, ...transactions]);
 
-    // If automatic Click/Payme, update balance immediately
     if (!isManual) {
       updateBalance(amount);
     }
@@ -363,7 +374,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!tx || tx.status !== 'PENDING') return;
 
     saveTransactions(transactions.map(t => t.id === txId ? { ...t, status: 'COMPLETED' } : t));
-    // If it's the current user, update balance
     if (user && user.id === tx.userId) {
       updateBalance(tx.amount);
     }
