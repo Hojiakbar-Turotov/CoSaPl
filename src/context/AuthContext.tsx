@@ -8,11 +8,32 @@ interface AuthContextType {
   user: User | null;
   role: UserRole;
   isAuthenticated: boolean;
-  loginWithTelegram: (role?: UserRole, customName?: string, customPhone?: string, tgId?: string) => Promise<void>;
+  loginWithTelegramData: (fullName: string, phone?: string, userRole?: UserRole, tgId?: string, username?: string) => Promise<void>;
   loginWithGoogle: (role?: UserRole) => Promise<void>;
   logout: () => void;
   switchRole: (role: UserRole) => void;
   updateBalance: (amount: number) => void;
+}
+
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        ready: () => void;
+        expand: () => void;
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+            first_name: string;
+            last_name?: string;
+            username?: string;
+            photo_url?: string;
+            language_code?: string;
+          };
+        };
+      };
+    };
+  }
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,30 +42,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // 1. Check if opened via Telegram Web App or URL query parameters from @CoSaPl_bot
-    if (typeof window !== 'undefined') {
-      const searchParams = new URLSearchParams(window.location.search);
-      const tgId = searchParams.get('tg_id');
-      const tgName = searchParams.get('name');
-      const tgPhone = searchParams.get('phone');
-      const tgRole = (searchParams.get('role') as UserRole) || 'STUDENT';
+    if (typeof window === 'undefined') return;
 
-      if (tgName || tgId) {
-        const tgUser: User = {
-          id: `tg_${tgId || Date.now()}`,
-          fullName: tgName ? decodeURIComponent(tgName) : 'Telegram Foydalanuvchisi',
-          phone: tgPhone ? decodeURIComponent(tgPhone) : '+998 90 000 00 00',
-          role: tgRole,
+    // 1. Check Telegram Web App native user data (Inside Telegram Mini App)
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+
+      const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
+      if (tgUser) {
+        const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || tgUser.username || `User ${tgUser.id}`;
+        const authenticatedUser: User = {
+          id: `tg_${tgUser.id}`,
+          fullName,
+          telegramId: tgUser.id.toString(),
+          telegramUsername: tgUser.username,
+          avatarUrl: tgUser.photo_url,
+          role: 'STUDENT',
           balance: 0,
-          telegramId: tgId || undefined,
           createdAt: new Date().toISOString(),
         };
-        saveUserToFirebaseAndLocal(tgUser);
+        saveUserToFirebaseAndLocal(authenticatedUser);
         return;
       }
     }
 
-    // 2. Check localStorage
+    // 2. Check URL query params from @CoSaPl_bot
+    const searchParams = new URLSearchParams(window.location.search);
+    const tgId = searchParams.get('tg_id');
+    const tgName = searchParams.get('name');
+    const tgPhone = searchParams.get('phone');
+    const tgUsername = searchParams.get('username');
+    const tgRole = (searchParams.get('role') as UserRole) || 'STUDENT';
+
+    if (tgName || tgId) {
+      const realName = tgName ? decodeURIComponent(tgName) : (tgUsername ? `@${tgUsername}` : `Telegram Foydalanuvchi`);
+      const authenticatedUser: User = {
+        id: `tg_${tgId || Date.now()}`,
+        fullName: realName,
+        phone: tgPhone ? decodeURIComponent(tgPhone) : undefined,
+        telegramId: tgId || undefined,
+        telegramUsername: tgUsername || undefined,
+        role: tgRole,
+        balance: 0,
+        createdAt: new Date().toISOString(),
+      };
+      saveUserToFirebaseAndLocal(authenticatedUser);
+      return;
+    }
+
+    // 3. Check localStorage
     const savedUser = localStorage.getItem('cosapl_current_user');
     if (savedUser) {
       try {
@@ -78,28 +125,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Telegram 1-Click / Bot Login
-  const loginWithTelegram = async (
+  const loginWithTelegramData = async (
+    fullName: string,
+    phone?: string,
     selectedRole: UserRole = 'STUDENT',
-    customName: string = 'Telegram Foydalanuvchisi',
-    customPhone: string = '+998 90 000 00 00',
-    tgId?: string
+    tgId?: string,
+    username?: string
   ) => {
     const userId = tgId ? `tg_${tgId}` : `tg_${Date.now()}`;
-    const tgUser: User = {
+    const cleanUser: User = {
       id: userId,
-      fullName: customName,
-      phone: customPhone,
+      fullName: fullName.trim(),
+      phone: phone || '+998 90 000 00 00',
       role: selectedRole,
-      telegramUsername: 'cosapl_user',
+      telegramUsername: username,
       telegramId: tgId,
       balance: 0,
       createdAt: new Date().toISOString(),
     };
-    await saveUserToFirebaseAndLocal(tgUser);
+    await saveUserToFirebaseAndLocal(cleanUser);
   };
 
-  // Google 1-Click Login
   const loginWithGoogle = async (selectedRole: UserRole = 'STUDENT') => {
     const googleUser: User = {
       id: `google_${Date.now()}`,
@@ -136,7 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         role: user?.role || 'STUDENT',
         isAuthenticated: !!user,
-        loginWithTelegram,
+        loginWithTelegramData,
         loginWithGoogle,
         logout,
         switchRole,
