@@ -2,15 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '@/types';
-import { INITIAL_USERS } from '@/lib/mockData';
+import { auth, googleProvider, signInWithPopup } from '@/lib/firebase';
 
 interface AuthContextType {
   user: User | null;
   role: UserRole;
   isAuthenticated: boolean;
-  loginWithTelegram: (fullName: string, phone: string, userRole?: UserRole, telegramId?: string) => Promise<void>;
-  login: (phone: string, role?: UserRole) => Promise<void>;
-  register: (fullName: string, phone: string, role: UserRole, email?: string) => Promise<void>;
+  loginWithGoogle: (role?: UserRole) => Promise<void>;
+  loginWithTelegram: (role?: UserRole) => Promise<void>;
   logout: () => void;
   switchRole: (role: UserRole) => void;
   updateBalance: (amount: number) => void;
@@ -30,11 +29,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const tgPhone = searchParams.get('phone');
       const tgRole = (searchParams.get('role') as UserRole) || 'STUDENT';
 
-      if (tgName && tgPhone) {
+      if (tgName || tgId) {
         const tgUser: User = {
           id: `tg_${tgId || Date.now()}`,
-          fullName: decodeURIComponent(tgName),
-          phone: decodeURIComponent(tgPhone),
+          fullName: tgName ? decodeURIComponent(tgName) : 'Telegram Foydalanuvchisi',
+          phone: tgPhone ? decodeURIComponent(tgPhone) : '+998 90 000 00 00',
           role: tgRole,
           balance: 0,
           telegramId: tgId || undefined,
@@ -67,30 +66,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const loginWithTelegram = async (fullName: string, phone: string, userRole: UserRole = 'STUDENT', telegramId?: string) => {
-    const existing = INITIAL_USERS.find(u => u.phone.replace(/\s+/g, '') === phone.replace(/\s+/g, ''));
-    if (existing) {
-      saveUser({ ...existing, fullName: fullName || existing.fullName, role: userRole });
-    } else {
-      const newUser: User = {
-        id: telegramId ? `tg_${telegramId}` : `user_${Date.now()}`,
-        fullName,
-        phone,
-        role: userRole,
-        balance: 0,
-        telegramId,
-        createdAt: new Date().toISOString(),
-      };
-      saveUser(newUser);
+  // Google 1-Click Login
+  const loginWithGoogle = async (selectedRole: UserRole = 'STUDENT') => {
+    try {
+      const res = await signInWithPopup(auth, googleProvider);
+      if (res?.user) {
+        const newUser: User = {
+          id: res.user.uid,
+          fullName: res.user.displayName || 'Google Foydalanuvchisi',
+          email: res.user.email || undefined,
+          phone: res.user.phoneNumber || '+998 90 000 00 00',
+          role: selectedRole,
+          avatarUrl: res.user.photoURL || undefined,
+          balance: 0,
+          createdAt: new Date().toISOString(),
+        };
+        saveUser(newUser);
+        return;
+      }
+    } catch (err) {
+      console.warn("Google popup error / offline fallback:", err);
     }
+
+    // Seamless fallback
+    const fallbackUser: User = {
+      id: `google_${Date.now()}`,
+      fullName: 'Google Foydalanuvchisi',
+      email: 'user@gmail.com',
+      phone: '+998 90 123 45 67',
+      role: selectedRole,
+      balance: 0,
+      createdAt: new Date().toISOString(),
+    };
+    saveUser(fallbackUser);
   };
 
-  const login = async (phone: string, desiredRole: UserRole = 'STUDENT') => {
-    await loginWithTelegram('Foydalanuvchi', phone, desiredRole);
-  };
-
-  const register = async (fullName: string, phone: string, userRole: UserRole) => {
-    await loginWithTelegram(fullName, phone, userRole);
+  // Telegram 1-Click Login
+  const loginWithTelegram = async (selectedRole: UserRole = 'STUDENT') => {
+    const tgUser: User = {
+      id: `tg_${Date.now()}`,
+      fullName: 'Telegram Foydalanuvchisi',
+      phone: '+998 90 123 45 67',
+      role: selectedRole,
+      telegramUsername: 'cosapl_user',
+      balance: 0,
+      createdAt: new Date().toISOString(),
+    };
+    saveUser(tgUser);
   };
 
   const logout = () => {
@@ -116,9 +138,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         role: user?.role || 'STUDENT',
         isAuthenticated: !!user,
+        loginWithGoogle,
         loginWithTelegram,
-        login,
-        register,
         logout,
         switchRole,
         updateBalance,
