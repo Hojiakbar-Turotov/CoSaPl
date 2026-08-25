@@ -8,6 +8,7 @@ interface AuthContextType {
   user: User | null;
   role: UserRole;
   isAuthenticated: boolean;
+  loginWithTelegram: (fullName: string, phone: string, userRole?: UserRole, telegramId?: string) => Promise<void>;
   login: (phone: string, role?: UserRole) => Promise<void>;
   register: (fullName: string, phone: string, role: UserRole, email?: string) => Promise<void>;
   logout: () => void;
@@ -21,7 +22,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Check localStorage - do NOT auto-login if nothing is saved
+    // 1. Check if opened via Telegram Web App or URL query parameters
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const tgId = searchParams.get('tg_id');
+      const tgName = searchParams.get('name');
+      const tgPhone = searchParams.get('phone');
+      const tgRole = (searchParams.get('role') as UserRole) || 'STUDENT';
+
+      if (tgName && tgPhone) {
+        const tgUser: User = {
+          id: `tg_${tgId || Date.now()}`,
+          fullName: decodeURIComponent(tgName),
+          phone: decodeURIComponent(tgPhone),
+          role: tgRole,
+          balance: 0,
+          telegramId: tgId || undefined,
+          createdAt: new Date().toISOString(),
+        };
+        saveUser(tgUser);
+        return;
+      }
+    }
+
+    // 2. Check localStorage
     const savedUser = localStorage.getItem('cosapl_current_user');
     if (savedUser) {
       try {
@@ -30,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       }
     } else {
-      setUser(null); // Anonymous visitor by default
+      setUser(null);
     }
   }, []);
 
@@ -43,34 +67,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (phone: string, desiredRole: UserRole = 'STUDENT') => {
+  const loginWithTelegram = async (fullName: string, phone: string, userRole: UserRole = 'STUDENT', telegramId?: string) => {
     const existing = INITIAL_USERS.find(u => u.phone.replace(/\s+/g, '') === phone.replace(/\s+/g, ''));
     if (existing) {
-      saveUser({ ...existing, role: desiredRole });
+      saveUser({ ...existing, fullName: fullName || existing.fullName, role: userRole });
     } else {
       const newUser: User = {
-        id: `user_${Date.now()}`,
-        fullName: 'Foydalanuvchi',
+        id: telegramId ? `tg_${telegramId}` : `user_${Date.now()}`,
+        fullName,
         phone,
-        role: desiredRole,
-        balance: 0, // Balance starts strictly at 0
+        role: userRole,
+        balance: 0,
+        telegramId,
         createdAt: new Date().toISOString(),
       };
       saveUser(newUser);
     }
   };
 
-  const register = async (fullName: string, phone: string, userRole: UserRole, email?: string) => {
-    const newUser: User = {
-      id: `user_${Date.now()}`,
-      fullName,
-      phone,
-      email,
-      role: userRole,
-      balance: 0, // Balance starts strictly at 0
-      createdAt: new Date().toISOString(),
-    };
-    saveUser(newUser);
+  const login = async (phone: string, desiredRole: UserRole = 'STUDENT') => {
+    await loginWithTelegram('Foydalanuvchi', phone, desiredRole);
+  };
+
+  const register = async (fullName: string, phone: string, userRole: UserRole) => {
+    await loginWithTelegram(fullName, phone, userRole);
   };
 
   const logout = () => {
@@ -96,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         role: user?.role || 'STUDENT',
         isAuthenticated: !!user,
+        loginWithTelegram,
         login,
         register,
         logout,
